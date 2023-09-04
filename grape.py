@@ -63,7 +63,8 @@ def grape(H0, Hk, u_0, rho_0, C, T, alpha=1e-3, epsilon=1e-3, max_iter=1000):
         rhoj = rhoj_new
         lambdaj = lambdaj_new
 
-    return threshold, u_kj
+    rho_T = rhoj[-1]
+    return threshold, u_kj, rho_T
 
 
 def cal_Uj(H0, Hk, delta_t, u_kj):
