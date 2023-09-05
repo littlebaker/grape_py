@@ -7,6 +7,7 @@ import numpy as np
 def test_grape():
     sm = destroy(2)
     rho_0 = basis(2, 0)
+    rho_0 = ket2dm(rho_0)
     
     # desired state is (|0> + exp(-i*pi/4)|1>)/sqrt(2)
     state_T = (basis(2, 0) + np.exp(-1j * np.pi / 4) * basis(2, 1)) / np.sqrt(2)
