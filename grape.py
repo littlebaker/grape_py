@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.linalg import expm
 import matplotlib.pyplot as plt
 
 
@@ -63,8 +64,7 @@ def grape(H0, Hk, u_0, rho_0, C, T, alpha=1e-3, epsilon=1e-3, max_iter=1000):
         rhoj = rhoj_new
         lambdaj = lambdaj_new
 
-    rho_T = rhoj[-1]
-    return threshold, u_kj, rho_T
+    return threshold, u_kj, rhoj
 
 
 def cal_Uj(H0, Hk, delta_t, u_kj):
@@ -73,11 +73,11 @@ def cal_Uj(H0, Hk, delta_t, u_kj):
 
     Uj = np.ndarray((N, n, n))
     for j in range(N):
-        sigma = np.zeros(n, n)
+        sigma = np.zeros((n, n),"complex128")
         for k in range(m):
             sigma += u_kj[k, j] * Hk[k]
 
-        Uj[j] = np.exp(-1j * delta_t * (H0 + sigma))
+        Uj[j] = expm(-1j * delta_t * (H0 + sigma))
 
     return Uj
 
@@ -90,7 +90,9 @@ def cal_rhoj(Uj, rho_0):
     for j in range(N):
         rho = rho_0
         for i in range(j + 1):
-            rho = np.dot(Uj[i], rho, Uj.T.conjugate())
+            Ut = Uj[i].T.conjugate()
+            A = np.dot(Uj[i], rho)
+            rho = np.dot(A, Ut)
         rhoj[j] = rho
 
     return rhoj
@@ -104,7 +106,9 @@ def cal_lambdaj(Uj, C):
     for j in range(N):
         lmda = C
         for i in range(j + 1, N):
-            lmda = np.dot(Uj[i], lmda, Uj.T.conjugate())
+            Ut = Uj[i].T.conjugate()
+            A = np.dot(Uj[i], lmda)
+            lmda = np.dot(A, Ut)
         lambdaj[j] = lmda
 
     return lambdaj
