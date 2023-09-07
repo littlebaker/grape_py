@@ -3,7 +3,7 @@ from scipy.linalg import expm
 import matplotlib.pyplot as plt
 
 
-def grape(H0, Hk, u_0, rho_0, C, T, alpha=1e-3, epsilon=1e-3, max_iter=1000):
+def grape(H0, Hk, u_0, rho_0, C, T, alpha=0.2, epsilon=1e-5, max_iter=1000):
     """grape algorithm
 
     Args:
@@ -40,12 +40,18 @@ def grape(H0, Hk, u_0, rho_0, C, T, alpha=1e-3, epsilon=1e-3, max_iter=1000):
     lambdaj = cal_lambdaj(Uj, C)
 
     for i in range(max_iter):
-        if threshold < epsilon:
-            break
+        print("i = ", i)
+        print("threshold = ", threshold)
+        # if threshold < epsilon:
+        #     print("threshold reached")
+        #     break
 
-        phi = np.trace(np.dot(lambdaj[0].T.conjugate(), rhoj[0]))
-        # calculate update_matrix and update u_kj
-        update_matrix = gradient(lambdaj, delta_t, Hk, rhoj)
+        # last phi
+        phi = np.trace(np.dot( C.T.conjugate(), rhoj[N-1] ))
+        print("last phi = ", phi)
+
+        # calculate update_matrix and update u_kj, step to optimization
+        update_matrix = gradient(lambdaj, rhoj, delta_t, Hk)
         u_kj = u_kj + alpha * update_matrix
 
         # update threshold
@@ -56,24 +62,25 @@ def grape(H0, Hk, u_0, rho_0, C, T, alpha=1e-3, epsilon=1e-3, max_iter=1000):
         # calculate lambdaj
         lambdaj_new = cal_lambdaj(Uj_new, C)
         # calculate phi_new
-        phi_new = np.trace(np.dot(lambdaj_new[0].T.conjugate(), rhoj_new[0]))
+        phi_new = np.trace(np.dot( C.T.conjugate(), rhoj_new[N-1] ))
         threshold = phi_new - phi
+        print("phi_new = ", phi_new)
 
         # results to next iteration
         Uj = Uj_new
         rhoj = rhoj_new
         lambdaj = lambdaj_new
 
-    return threshold, u_kj, rhoj
+    return threshold, u_kj, rhoj[N - 1]
 
 
 def cal_Uj(H0, Hk, delta_t, u_kj):
     m, N = np.shape(u_kj)
     n = H0.shape[0]
 
-    Uj = np.ndarray((N, n, n))
+    Uj = np.ndarray((N, n, n), "complex128")
     for j in range(N):
-        sigma = np.zeros((n, n),"complex128")
+        sigma = np.zeros((n, n), "complex128")
         for k in range(m):
             sigma += u_kj[k, j] * Hk[k]
 
@@ -86,7 +93,7 @@ def cal_rhoj(Uj, rho_0):
     N = np.shape(Uj)[0]
     n = np.shape(Uj)[1]
 
-    rhoj = np.ndarray((N, n, n))
+    rhoj = np.ndarray((N, n, n), "complex128")
     for j in range(N):
         rho = rho_0
         for i in range(j + 1):
@@ -102,7 +109,7 @@ def cal_lambdaj(Uj, C):
     N = np.shape(Uj)[0]
     n = np.shape(Uj)[1]
 
-    lambdaj = np.ndarray((N, n, n))
+    lambdaj = np.ndarray((N, n, n), "complex128")
     for j in range(N):
         lmda = C
         for i in range(j + 1, N):
@@ -114,11 +121,11 @@ def cal_lambdaj(Uj, C):
     return lambdaj
 
 
-def gradient(lambdaj, delta_t, Hk, rhoj):
+def gradient(lambdaj, rhoj, delta_t, Hk):
     m = len(Hk)
     N = np.shape(rhoj)[0]
 
-    um = np.ndarray((m, N))
+    um = np.ndarray((m, N), "complex128")
     for k in range(m):
         for j in range(N):
             duiyi = 1j * delta_t * (np.dot(Hk[k], rhoj[j]) - np.dot(rhoj[j], Hk[k]))
