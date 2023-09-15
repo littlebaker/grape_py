@@ -18,18 +18,18 @@ def test_grape():
     C = ket2dm(basis(2, 1)).full()
     
     # H0 is 0, it seems that using sigma_z will lead to a slower precision
-    H0 = np.zeros((2, 2), dtype=np.complex128)
+    H0 = (sm.dag() * sm - 0.5 * identity(2)).full()
     # H1 is sigma_x
     H1 = (sm + sm.dag()).full()
     # H2 is sigma_y
     H2 = (-1j * (sm - sm.dag())).full()
     
-    Hk = [H1]
+    Hk = [H1, H2]
     T = 1
     # alpha needs to be rather large, otherwise the precision is not good
     # alpha needs to be set depending on the delta_t, because the gradient's calculation 
     # is based on delta_t * alpha
-    threshold, u_kj, rho_T = grape(H0, Hk, np.full((1, N), 3), rho_0, C, T, alpha=10)
+    threshold, u_kj, rho_T = grape(H0, Hk, np.full((2, N), 3), rho_0, C, T, alpha=10, max_iter=10000)
     
     # print(u_kj)
     print(rho_T[-1])

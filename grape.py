@@ -1,9 +1,9 @@
 import numpy as np
 from scipy.linalg import expm
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
-def grape(H0, Hk, u_0, rho_0, C, T, alpha, epsilon=1e-6, max_iter=1000):
+def grape(H0, Hk, u_0, rho_0, C, T, alpha, target="trace_real", epsilon=1e-6, max_iter=1000):
     """grape algorithm
 
     Args:
@@ -14,6 +14,7 @@ def grape(H0, Hk, u_0, rho_0, C, T, alpha, epsilon=1e-6, max_iter=1000):
         C (np.ndarray): final target operator
         T (float): final time
         alpha (float, optional): step size. Defaults to 1e-3.
+        target (str, optional): target function. Defaults to "trace_real", options: "trace_real", "trace_both", "abs".
         epsilon (float, optional): convergence threshold. Defaults to 1e-3.
         max_iter (int, optional): maximum number of iterations. Defaults to 1000.
     """
@@ -37,20 +38,29 @@ def grape(H0, Hk, u_0, rho_0, C, T, alpha, epsilon=1e-6, max_iter=1000):
     Uj = cal_Uj(H0, Hk, delta_t, u_kj)
     rhoj = cal_rhoj(Uj, rho_0)
     lambdaj = cal_lambdaj(Uj, C)
+    
+    reach_threshold = False
 
     for i in range(max_iter):
-        print("i = ", i)
-        print("threshold = ", threshold)
         if threshold < epsilon:
-            print("threshold reached")
+            reach_threshold = True
+            print("threshold reached, iteration number: ", i)
             break
 
         # last phi
         phi = np.trace(np.dot( C.T.conjugate(), rhoj[-1] ))
-        print("last phi = ", phi)
 
         # calculate update_matrix and update u_kj, step to optimization
-        update_matrix = gradient(lambdaj, rhoj, delta_t, Hk)
+        update_matrix = None
+        if target == "trace_real":
+            update_matrix = gradient(lambdaj, rhoj, delta_t, Hk)
+        elif target == "trace_both":
+            pass
+        elif target == "abs":
+            pass
+        else:
+            raise ValueError("target function not supported")
+            
         u_kj = u_kj + alpha * update_matrix
 
         # update threshold
@@ -63,12 +73,14 @@ def grape(H0, Hk, u_0, rho_0, C, T, alpha, epsilon=1e-6, max_iter=1000):
         # calculate phi_new
         phi_new = np.trace(np.dot( C.T.conjugate(), rhoj_new[N-1] ))
         threshold = phi_new - phi
-        print("phi_new = ", phi_new)
 
         # results to next iteration
         Uj = Uj_new
         rhoj = rhoj_new
         lambdaj = lambdaj_new
+        
+    if not reach_threshold:
+        print("max iterations reached")
 
     return threshold, u_kj, rhoj
 
@@ -88,6 +100,7 @@ def cal_rhoj(Uj, rho_0):
     rho_0 = np.array(rho_0)
 
     rhoj = np.ndarray((N, n, n), np.complex128)
+    a = list(range(N))
     rhoj[0] = Uj[0] @ rho_0 @ (Uj[0].conj().T)
     for j in range(1,N):
         rhoj[j] = Uj[j] @ rhoj[j-1] @ (Uj[j].conj().T)

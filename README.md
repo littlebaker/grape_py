@@ -6,6 +6,3 @@ The article [Optimal control of coupled spin dynamics: design of NMR pulse seque
 ## requirement
 Please follow the **requirements.txt** 
 
-
-## implementation
-Please follow the comments in `main.py` to fill the TODOs inside it.
