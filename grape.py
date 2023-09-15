@@ -101,23 +101,23 @@ def cal_lambdaj(Uj, C):
     C = np.array(C)
 
     lambdaj = np.ndarray((N, n, n), np.complex128)
-    lambdaj[-1] = Uj[-1].conj().T @ C @ Uj[-1]
+    lambdaj[-1] = C
     for j in range(N-2, -1, -1):
-        lambdaj[j] = Uj[j].conj().T @ lambdaj[j+1] @ Uj[j]
+        lambdaj[j] = Uj[j+1].conj().T @ lambdaj[j+1] @ Uj[j+1]
 
     return lambdaj
 
 
-def gradient(lambdaj, rhoj, delta_t, Hk): 
+def gradient(lambdaj, rhoj, delta_t, Hk):  # lambdaj: n*n, rhoj: N*n*n delta_t: constant number Hk : m*n*n
     m = len(Hk)
     N = np.shape(rhoj)[0]
+    lambdaj = np.array(lambdaj)
+    rhoj = np.array(rhoj)
+    Hk = np.array(Hk)
 
-    um = np.ndarray((m, N), np.complex128)
-    for k in range(m):
-        for j in range(N):
-            commutation = 1j * delta_t * (Hk[k] @ rhoj[j] - rhoj[j] @ Hk[k])
-            ipmat = - lambdaj[j].conj().T @ commutation
-            um[k, j] = np.trace(ipmat)
+    commutation = 1j * delta_t * (np.matmul(Hk[:, None], rhoj) - np.matmul(rhoj, Hk[:, None]))
+    lambdaj = lambdaj.conj().swapaxes(1,2)
+    ipmat = -np.matmul(lambdaj, commutation)
+    um = np.trace(ipmat, axis1=2, axis2=3)
 
     return um
-
