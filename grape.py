@@ -38,7 +38,7 @@ def grape(H0, Hk, u_0, rho_0, C, T, alpha, target="trace_real", epsilon=1e-6, ma
     Uj = cal_Uj(H0, Hk, delta_t, u_kj)
     rhoj = cal_rhoj(Uj, rho_0)
     lambdaj = cal_lambdaj(Uj, C)
-    
+
     reach_threshold = False
 
     for i in range(max_iter):
@@ -48,19 +48,35 @@ def grape(H0, Hk, u_0, rho_0, C, T, alpha, target="trace_real", epsilon=1e-6, ma
             break
 
         # last phi
-        phi = np.trace(np.dot( C.T.conjugate(), rhoj[-1] ))
+        phi = np.trace(C.T.conj() @ rhoj[-1])
+        if target == "trace_real":
+            pass
+        elif target == "trace_both":
+            phi = np.real(phi)
+        elif target == "abs":
+            phi = phi * (phi.conj())
+        else:
+            raise ValueError("target function not supported")
 
         # calculate update_matrix and update u_kj, step to optimization
         update_matrix = None
         if target == "trace_real":
             update_matrix = gradient(lambdaj, rhoj, delta_t, Hk)
         elif target == "trace_both":
-            pass
+            lx = (lambdaj + lambdaj.T.conj()) / 2
+            ly = (lambdaj - lambdaj.T.conj()) / 2j
+            rx = (rhoj + rhoj.T.conj()) / 2
+            ry = (rhoj - rhoj.T.conj()) / 2j
+            umx = gradient(lx, rx, delta_t, Hk)
+            umy = gradient(ly, ry, delta_t, Hk)
+            update_matrix = - umx - umy
         elif target == "abs":
-            pass
+            um1 = gradient(lambdaj, rhoj, delta_t, Hk)
+            um2 = np.trace(rhoj[-1].conj().T @ C)
+            update_matrix = -2 * np.real(um1 * um2)
         else:
             raise ValueError("target function not supported")
-            
+
         u_kj = u_kj + alpha * update_matrix
 
         # update threshold
@@ -71,21 +87,21 @@ def grape(H0, Hk, u_0, rho_0, C, T, alpha, target="trace_real", epsilon=1e-6, ma
         # calculate lambdaj
         lambdaj_new = cal_lambdaj(Uj_new, C)
         # calculate phi_new
-        phi_new = np.trace(np.dot( C.T.conjugate(), rhoj_new[N-1] ))
+        phi_new = np.trace(np.dot(C.T.conjugate(), rhoj_new[N - 1]))
         threshold = phi_new - phi
 
         # results to next iteration
         Uj = Uj_new
         rhoj = rhoj_new
         lambdaj = lambdaj_new
-        
+
     if not reach_threshold:
         print("max iterations reached")
 
     return threshold, u_kj, rhoj
 
 
-def cal_Uj(H0, Hk, delta_t, u_kj):    #u_kj mxN, Hk mxnxn, Uj Nxnxn matrix
+def cal_Uj(H0, Hk, delta_t, u_kj):  # u_kj mxN, Hk mxnxn, Uj Nxnxn matrix
     m, N = np.shape(u_kj)
     n = H0.shape[0]
 
@@ -102,8 +118,8 @@ def cal_rhoj(Uj, rho_0):
     rhoj = np.ndarray((N, n, n), np.complex128)
     a = list(range(N))
     rhoj[0] = Uj[0] @ rho_0 @ (Uj[0].conj().T)
-    for j in range(1,N):
-        rhoj[j] = Uj[j] @ rhoj[j-1] @ (Uj[j].conj().T)
+    for j in range(1, N):
+        rhoj[j] = Uj[j] @ rhoj[j - 1] @ (Uj[j].conj().T)
 
     return rhoj
 
@@ -115,8 +131,8 @@ def cal_lambdaj(Uj, C):
 
     lambdaj = np.ndarray((N, n, n), np.complex128)
     lambdaj[-1] = C
-    for j in range(N-2, -1, -1):
-        lambdaj[j] = Uj[j+1].conj().T @ lambdaj[j+1] @ Uj[j+1]
+    for j in range(N - 2, -1, -1):
+        lambdaj[j] = Uj[j + 1].conj().T @ lambdaj[j + 1] @ Uj[j + 1]
 
     return lambdaj
 
@@ -129,7 +145,7 @@ def gradient(lambdaj, rhoj, delta_t, Hk):  # lambdaj: n*n, rhoj: N*n*n delta_t: 
     Hk = np.array(Hk)
 
     commutation = 1j * delta_t * (np.matmul(Hk[:, None], rhoj) - np.matmul(rhoj, Hk[:, None]))
-    lambdaj = lambdaj.conj().swapaxes(1,2)
+    lambdaj = lambdaj.conj().swapaxes(1, 2)
     ipmat = -np.matmul(lambdaj, commutation)
     um = np.trace(ipmat, axis1=2, axis2=3)
 
