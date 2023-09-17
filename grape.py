@@ -48,16 +48,32 @@ def grape(H0, Hk, u_0, rho_0, C, T, alpha, target="trace_real", epsilon=1e-6, ma
             break
 
         # last phi
-        phi = np.trace(np.dot( C.T.conjugate(), rhoj[-1] ))
+        phi = np.trace(C.T.conj() @ rhoj[-1])
+        if target == "trace_real":
+            pass
+        elif target == "trace_both":
+            phi = np.real(phi)
+        elif target == "abs":
+            phi = phi*phi
+        else:
+            raise ValueError("target function not supported")
 
         # calculate update_matrix and update u_kj, step to optimization
         update_matrix = None
         if target == "trace_real":
             update_matrix = gradient(lambdaj, rhoj, delta_t, Hk)
         elif target == "trace_both":
-            pass
+            lx = np.real(lambdaj)
+            ly = np.imag(lambdaj)
+            rx = np.real(rhoj)
+            ry = np.imag(rhoj)
+            umx = gradient(lx, rx, delta_t, Hk)
+            umy = gradient(ly, ry, delta_t, Hk)
+            update_matrix = - umx - umy
         elif target == "abs":
-            pass
+            um1 = gradient(lambdaj, rhoj, delta_t, Hk)
+            um2 = np.trace(rhoj[-1].conj().T @ C)
+            update_matrix = -2*np.real(um1*um2)
         else:
             raise ValueError("target function not supported")
             
