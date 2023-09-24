@@ -1,104 +1,8 @@
 import numpy as np
 from scipy.linalg import expm
 from tqdm import tqdm
-
-
-def grape(H0, Hk, u_0, rho_0, C, T, alpha, target="trace_real", epsilon=1e-6, max_iter=1000):
-    """grape algorithm
-
-    Args:
-        H0 (np.ndarray): nxn matrix, basic Hamiltonian
-        Hk (np.ndarray): nxn matrix or list of nxn matrices, control Hamiltonian
-        u_0 (np.ndarray): mxN matrix u[k, j] is the k-th control function at time j
-        rho_0 (np.ndarray): nxn matrix initial state
-        C (np.ndarray): final target operator
-        T (float): final time
-        alpha (float, optional): step size. Defaults to 1e-3.
-        target (str, optional): target function. Defaults to "trace_real", options: "trace_real", "trace_both", "abs".
-        epsilon (float, optional): convergence threshold. Defaults to 1e-3.
-        max_iter (int, optional): maximum number of iterations. Defaults to 1000.
-    """
-
-    # basic check
-    m, N = u_0.shape
-    assert m == len(Hk), "number of control functions must be equal to number of control Hamiltonians"
-    delta_t = T / N
-
-    # check hamiltonian shape
-    n = H0.shape[0]
-    assert H0.shape == (n, n), "basic Hamiltonian must be a square matrix"
-    for H in Hk:
-        assert H.shape == (n, n), "control Hamiltonian must be a square matrix"
-
-    # copy u_0
-    u_kj = np.array(u_0)
-
-    # start iteration
-    threshold = np.inf
-    Uj = cal_Uj(H0, Hk, delta_t, u_kj)
-    rhoj = cal_rhoj(Uj, rho_0)
-    lambdaj = cal_lambdaj(Uj, C)
-
-    reach_threshold = False
-
-    for i in range(max_iter):
-        if threshold < epsilon:
-            reach_threshold = True
-            print("threshold reached, iteration number: ", i)
-            break
-
-        # last phi
-        phi = np.trace(C.T.conj() @ rhoj[-1])
-        if target == "trace_real":
-            pass
-        elif target == "trace_both":
-            phi = np.real(phi)
-        elif target == "abs":
-            phi = phi * (phi.conj())
-        else:
-            raise ValueError("target function not supported")
-
-        # calculate update_matrix and update u_kj, step to optimization
-        update_matrix = None
-        if target == "trace_real":
-            update_matrix = gradient(lambdaj, rhoj, delta_t, Hk)
-        elif target == "trace_both":
-            lx = (lambdaj + lambdaj.T.conj()) / 2
-            ly = (lambdaj - lambdaj.T.conj()) / 2j
-            rx = (rhoj + rhoj.T.conj()) / 2
-            ry = (rhoj - rhoj.T.conj()) / 2j
-            umx = gradient(lx, rx, delta_t, Hk)
-            umy = gradient(ly, ry, delta_t, Hk)
-            update_matrix = - umx - umy
-        elif target == "abs":
-            um1 = gradient(lambdaj, rhoj, delta_t, Hk)
-            um2 = np.trace(rhoj[-1].conj().T @ C)
-            update_matrix = -2 * np.real(um1 * um2)
-        else:
-            raise ValueError("target function not supported")
-
-        u_kj = u_kj + alpha * update_matrix
-
-        # update threshold
-        # calculate new Uj
-        Uj_new = cal_Uj(H0, Hk, delta_t, u_kj)
-        # calculate rhoj
-        rhoj_new = cal_rhoj(Uj_new, rho_0)
-        # calculate lambdaj
-        lambdaj_new = cal_lambdaj(Uj_new, C)
-        # calculate phi_new
-        phi_new = np.trace(np.dot(C.T.conjugate(), rhoj_new[N - 1]))
-        threshold = phi_new - phi
-
-        # results to next iteration
-        Uj = Uj_new
-        rhoj = rhoj_new
-        lambdaj = lambdaj_new
-
-    if not reach_threshold:
-        print("max iterations reached")
-
-    return threshold, u_kj, rhoj
+from qutip import Qobj
+from scipy.optimize import BFGS
 
 
 def cal_Uj(H0, Hk, delta_t, u_kj):  # u_kj mxN, Hk mxnxn, Uj Nxnxn matrix
@@ -150,3 +54,117 @@ def gradient(lambdaj, rhoj, delta_t, Hk):  # lambdaj: n*n, rhoj: N*n*n delta_t: 
     um = np.trace(ipmat, axis1=2, axis2=3)
 
     return um
+
+
+def grape(H0, Hk, u_0, rho_0, C, T, alpha, target="trace_real", max_iter=1000, fidility=0.9999, epsilon=None):
+    """grape algorithm
+
+    Args:
+        H0 (np.ndarray): nxn matrix, basic Hamiltonian
+        Hk (np.ndarray): nxn matrix or list of nxn matrices, control Hamiltonian
+        u_0 (np.ndarray): mxN matrix u[k, j] is the k-th control function at time j
+        rho_0 (np.ndarray): nxn matrix initial state
+        C (np.ndarray): final target operator
+        T (float): final time
+        alpha (float, optional): step size. Defaults to 1e-3.
+        target (str, optional): target function. Defaults to "trace_real", options: "trace_real", "trace_both", "abs".
+        epsilon (float, optional): convergence threshold. Defaults to 1e-3.
+        max_iter (int, optional): maximum number of iterations. Defaults to 1000.
+        fidility (float, optional): fidility threshold. Defaults to 0.9999.
+    """
+
+    # basic check
+    m, N = u_0.shape
+    assert m == len(Hk), "number of control functions must be equal to number of control Hamiltonians"
+    delta_t = T / N
+    if isinstance(rho_0, Qobj):
+        rho_0 = rho_0.full()
+    if isinstance(C, Qobj):
+        C = C.full()
+
+    # check hamiltonian shape
+    if isinstance(H0, Qobj):
+        H0 = H0.full()
+    n = H0.shape[0]
+    assert H0.shape == (n, n), "basic Hamiltonian must be a square matrix"
+    for i, H in enumerate(Hk):
+        if isinstance(H, Qobj):
+            Hk[i] = H.full()
+        assert H.shape == (n, n), "control Hamiltonian must be a square matrix"
+
+    # copy u_0
+    u_kj = np.array(u_0)
+
+    # start iteration
+    threshold = np.inf
+    Uj = cal_Uj(H0, Hk, delta_t, u_kj)
+    rhoj = cal_rhoj(Uj, rho_0)
+    lambdaj = cal_lambdaj(Uj, C)
+
+    reach_threshold = False
+
+    for i in range(max_iter):
+        if epsilon is not None and threshold < epsilon:
+            reach_threshold = True
+            print("threshold reached, iteration number: ", i)
+            break
+
+
+        # last phi
+        phi = np.trace(C.T.conj() @ rhoj[-1])
+        if target == "trace_real":
+            pass
+        elif target == "trace_both":
+            phi = np.real(phi)
+        elif target == "abs":
+            phi = phi * (phi.conj())
+        else:
+            raise ValueError("target function not supported")
+
+        # calculate update_matrix and update u_kj, step to optimization
+        update_matrix = None
+        if target == "trace_real":
+            update_matrix = gradient(lambdaj, rhoj, delta_t, Hk)
+        elif target == "trace_both":
+            lx = (lambdaj + lambdaj.T.conj()) / 2
+            ly = (lambdaj - lambdaj.T.conj()) / 2j
+            rx = (rhoj + rhoj.T.conj()) / 2
+            ry = (rhoj - rhoj.T.conj()) / 2j
+            umx = gradient(lx, rx, delta_t, Hk)
+            umy = gradient(ly, ry, delta_t, Hk)
+            update_matrix = - umx - umy
+        elif target == "abs":
+            um1 = gradient(lambdaj, rhoj, delta_t, Hk)
+            um2 = np.trace(rhoj[-1].conj().T @ C)
+            update_matrix = -2 * np.real(um1 * um2)
+        else:
+            raise ValueError("target function not supported")
+
+        u_kj = u_kj + alpha * update_matrix
+
+        # update threshold
+        # calculate new Uj
+        Uj_new = cal_Uj(H0, Hk, delta_t, u_kj)
+        # calculate rhoj
+        rhoj_new = cal_rhoj(Uj_new, rho_0)
+        # calculate lambdaj
+        lambdaj_new = cal_lambdaj(Uj_new, C)
+        # calculate phi_new
+        phi_new = np.trace(np.dot(C.T.conjugate(), rhoj_new[N - 1]))
+        threshold = phi_new - phi
+
+        # results to next iteration
+        Uj = Uj_new
+        rhoj = rhoj_new
+        lambdaj = lambdaj_new
+        
+        if fidility is not None and phi_new > fidility:
+            reach_threshold = True
+            print("fidility reached, iteration number: ", i)
+            break
+
+    if not reach_threshold:
+        print("max iterations reached")
+
+    return threshold, u_kj, rhoj
+
