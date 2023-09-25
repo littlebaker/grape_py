@@ -1,8 +1,9 @@
+from typing import List, Union
 import numpy as np
 from scipy.linalg import expm
 from tqdm import tqdm
 from qutip import Qobj
-from scipy.optimize import BFGS, line_search, minimize
+from scipy.optimize import BFGS, line_search, minimize, OptimizeResult
 
 
 def cal_Uj(H0, Hk, delta_t, u_kj):  # u_kj mxN, Hk mxnxn, Uj Nxnxn matrix
@@ -60,17 +61,17 @@ def gradient(lambdaj, rhoj, delta_t, Hk):  # lambdaj: n*n, rhoj: N*n*n delta_t: 
 
 
 def grape(
-    H0, 
-    Hk, 
-    u_0, 
-    rho_0, 
-    C, 
-    T, 
-    alpha, 
-    target="trace_real", 
-    max_iter=1000, 
-    fidility=0.9999, 
-    epsilon=None,
+    H0: Union[np.ndarray, Qobj],
+    Hk: List[Union[np.ndarray, Qobj]], 
+    u_0: np.ndarray, 
+    rho_0: Union[np.ndarray, Qobj],
+    C: Union[np.ndarray, Qobj],
+    T: int, 
+    alpha: float = 1, 
+    target: str = "trace_real", 
+    max_iter: int = 1000, 
+    fidility: float = 0.9999, 
+    epsilon: Union[float, None] = None,
 ):
     """grape algorithm
 
@@ -188,16 +189,34 @@ def grape(
 
 
 def grape_bfgs(
-    H0, 
-    Hk, 
-    u_0, 
-    rho_0, 
-    C, 
-    T, 
-    target="trace_real", 
-    max_iter=1000,
-    gtol=1e-6
-):
+    H0: Union[np.ndarray, Qobj],
+    Hk: List[Union[np.ndarray, Qobj]], 
+    u_0: np.ndarray, 
+    rho_0: Union[np.ndarray, Qobj], 
+    C: Union[np.ndarray, Qobj], 
+    T: int, 
+    target: str = "trace_real", 
+    max_iter:int = 1000,
+    gtol: float = 1e-6,
+    disp: bool = True,
+) -> OptimizeResult:
+    """grape algorithm, using BFGS method from scipy
+
+    Args:
+        H0 (Union[np.ndarray, Qobj]): nxn matrix or a Qobj with same shape, basic Hamiltonian
+        Hk (List[Union[np.ndarray, Qobj]]): list of nxn matrices or list of Qobj with same shape, control Hamiltonian
+        u_0 (np.ndarray): mxN matrix u[k, j] is the k-th control function at time j
+        rho_0 (Union[np.ndarray, Qobj]): nxn matrix or a Qobj with same shape, initial state
+        C (Union[np.ndarray, Qobj]): final target operator
+        T (int): final time
+        target (str, optional): different evaluation function. Defaults to "trace_real". Options: ["trace_real", "trace_both", "abs"].
+        max_iter (int, optional): maxium iteration number. Defaults to 1000.
+        gtol (float, optional): BFGS options,  gradient tolerence. Defaults to 1e-6.
+        disp (bool, optional): BFGS options, whether to print state to console. Defaults to True.
+
+    Returns:
+        OptimizeResult: result of optimization, note that x is a 1d array, need to reshape to (m, N)
+    """
     # basic check
     m, N = u_0.shape
     assert m == len(Hk), "number of control functions must be equal to number of control Hamiltonians"
@@ -242,5 +261,5 @@ def grape_bfgs(
             "maxiter": max_iter,
         }
     )
-    # print(res)
+
     return res
