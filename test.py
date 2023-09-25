@@ -1,5 +1,5 @@
 # TODO: add test cases
-from grape import grape, grape_bfgs
+from grape_hamiltonian import grape, grape_bfgs
 from qutip import destroy, identity, tensor, expect, mesolve, basis, ket2dm
 import numpy as np
 
@@ -47,15 +47,17 @@ def test_grape():
 def test_grape_jcmodel():
     steps = 100
     # jaynes-cummings model
-    N = 6
+    N1 = 4
+    N2 = 6
     g = 0.01
-    sm = tensor(destroy(2), identity(N))
-    a = tensor(identity(2), destroy(N))
+    chi = 0.1
+    sm = tensor(destroy(N1), identity(N2))
+    a = tensor(identity(N1), destroy(N2))
     
-    rho_0 = ket2dm(tensor(basis(2, 0), basis(N, 0)))
+    rho_0 = ket2dm(tensor(basis(N1, 0), basis(N2, 0)))
     
     # Hamiltonian of the system, supposed w_c = w_a = w_d
-    H0 = + g * (sm * a.dag() + sm.dag() * a)
+    H0 = + g * (sm * a.dag() + sm.dag() * a) + chi * (sm.dag() * sm.dag() * sm * sm)
     
     # H1 is sigma_x
     H1 = (sm + sm.dag())
@@ -66,12 +68,17 @@ def test_grape_jcmodel():
     H4 = (a*a + a.dag()*a.dag())
     
     # C = (|0>+|4>)/sqrt(2)
-    C = ket2dm(tensor(basis(2, 0), (basis(N, 4)+basis(N, 0))/np.sqrt(2)))
+    C = ket2dm(tensor(basis(N1, 0), (basis(N2, 4)+basis(N2, 0))/np.sqrt(2)))
     
-    Hk = [H1, H2, H3, H4]
+    Hk = [
+        H1,
+        H2,
+        H3,
+        # H4
+    ]
     T = 1
     
-    res = grape_bfgs(H0, Hk, np.random.normal(1, 0, (len(Hk), steps)), rho_0, C, T)
+    res = grape_bfgs(H0, Hk, np.random.normal(0, 1, (len(Hk), steps)), rho_0, C, T)
     
     print(res)
     # print("u_kj: ", res.x.reshape(len(Hk), steps))
@@ -85,6 +92,7 @@ def test_grape_bfgs():
     N = 200
     sm = destroy(2)
     rho_0 = basis(2, 0)
+    a = np.array(rho_0)
     rho_0 = ket2dm(rho_0).full().astype(np.complex128)
     
     # desired state is (|0> + np.exp(1j*np.pi/4)*|1>)/sqrt(2)

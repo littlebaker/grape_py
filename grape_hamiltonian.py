@@ -2,11 +2,11 @@ from typing import List, Union
 import numpy as np
 from scipy.linalg import expm
 from tqdm import tqdm
-from qutip import Qobj
+from qutip import Qobj, liouvillian
 from scipy.optimize import BFGS, line_search, minimize, OptimizeResult
 
 
-def cal_Uj(H0, Hk, delta_t, u_kj):  # u_kj mxN, Hk mxnxn, Uj Nxnxn matrix
+def _propagator(H0, Hk, delta_t, u_kj):  # u_kj mxN, Hk mxnxn, Uj Nxnxn matrix
     m, N = np.shape(u_kj)
     n = H0.shape[0]
 
@@ -15,13 +15,13 @@ def cal_Uj(H0, Hk, delta_t, u_kj):  # u_kj mxN, Hk mxnxn, Uj Nxnxn matrix
     return Uj
 
 
-def cal_rhoj(Uj, rho_0):
+
+def _density_matrix(Uj, rho_0):
     N = np.shape(Uj)[0]
     n = np.shape(Uj)[1]
     rho_0 = np.array(rho_0)
 
     rhoj = np.ndarray((N, n, n), np.complex128)
-    a = list(range(N))
     rhoj[0] = Uj[0] @ rho_0 @ (Uj[0].conj().T)
     for j in range(1, N):
         rhoj[j] = Uj[j] @ rhoj[j - 1] @ (Uj[j].conj().T)
@@ -29,7 +29,7 @@ def cal_rhoj(Uj, rho_0):
     return rhoj
 
 
-def cal_lambdaj(Uj, C):
+def _lambda(Uj, C):
     N = np.shape(Uj)[0]
     n = np.shape(Uj)[1]
     C = np.array(C)
@@ -116,9 +116,9 @@ def grape(
 
     # start iteration
     threshold = np.inf
-    Uj = cal_Uj(H0, Hk, delta_t, u_kj)
-    rhoj = cal_rhoj(Uj, rho_0)
-    lambdaj = cal_lambdaj(Uj, C)
+    Uj = _propagator(H0, Hk, delta_t, u_kj)
+    rhoj = _density_matrix(Uj, rho_0)
+    lambdaj = _lambda(Uj, C)
 
     reach_threshold = False
     
@@ -162,11 +162,11 @@ def grape(
 
         # update threshold
         # calculate new Uj
-        Uj_new = cal_Uj(H0, Hk, delta_t, u_kj)
+        Uj_new = _propagator(H0, Hk, delta_t, u_kj)
         # calculate rhoj
-        rhoj_new = cal_rhoj(Uj_new, rho_0)
+        rhoj_new = _density_matrix(Uj_new, rho_0)
         # calculate lambdaj
-        lambdaj_new = cal_lambdaj(Uj_new, C)
+        lambdaj_new = _lambda(Uj_new, C)
         # calculate phi_new
         phi_new = np.trace(np.dot(C.T.conjugate(), rhoj_new[N - 1]))
         threshold = phi_new - phi
@@ -242,12 +242,12 @@ def grape_bfgs(
     u_kj = np.array(u_0)
     
     def _f(x):
-        return -np.trace(np.dot(C.T.conjugate(), cal_rhoj(cal_Uj(H0, Hk, delta_t, x.reshape(m, N)), rho_0)[-1])).real.astype(np.float64)
+        return -np.trace(np.dot(C.T.conjugate(), _density_matrix(_propagator(H0, Hk, delta_t, x.reshape(m, N)), rho_0)[-1])).real.astype(np.float64)
     
     def _grad_f(x):
-        _Uj = cal_Uj(H0, Hk, delta_t, x.reshape(m, N))
-        _lambda_j = cal_lambdaj(_Uj, C)
-        _rho_j = cal_rhoj(_Uj, rho_0)
+        _Uj = _propagator(H0, Hk, delta_t, x.reshape(m, N))
+        _lambda_j = _lambda(_Uj, C)
+        _rho_j = _density_matrix(_Uj, rho_0)
         return -gradient(_lambda_j, _rho_j, delta_t, Hk).flatten().real.astype(np.float64)
     
     res = minimize(
