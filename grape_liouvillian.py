@@ -116,10 +116,7 @@ def _liouvillian_gradient(
     lambdaj: np.ndarray, 
     rhoj: np.ndarray, 
     delta_t: float, 
-    u_kj: np.ndarray,
-    Hk: List[np.ndarray],
-    H0: Union[np.ndarray, None] = None,
-    order = 1
+    Hk: List[np.ndarray]
 ) -> np.ndarray:
     """_summary_
 
@@ -134,28 +131,20 @@ def _liouvillian_gradient(
     lambdaj = np.array(lambdaj)
     rhoj = np.array(rhoj)
     Hk = np.array(Hk)
-    
-    L_all = np.eye(n2)
-    Lk = _liouvillian_operator_batch(Hk, [])
-    if H0 is not None:
-        _l = _liouvillian_operator_batch(H0, [])
-        L_all = _l + np.tensordot(u_kj, Lk, axes=([0], [0]))
-    Lk = Lk[:, np.newaxis]
-    L_all = L_all[np.newaxis, :]
-    
-    lambdaj_dagger = lambdaj.conj().swapaxes(1, 2)
+    rhoj_unvec = _unvec(rhoj, ((N, n, n)))
 
+    lambdaj_unvec_dagger = _unvec(lambdaj, ((N, n, n))).conj().swapaxes(1, 2)
     commutation = 1j * delta_t \
         * (
             np.matmul(Hk[:, None], rhoj_unvec) \
             - np.matmul(rhoj_unvec, Hk[:, None])
         )
-    lambdaj_unvec_dagger = _unvec(lambdaj, ((N, n, n))).conj().swapaxes(1, 2)
+    
     grad_original = -np.matmul(lambdaj_unvec_dagger, commutation)
     grad = np.trace(grad_original, axis1=2, axis2=3)
 
     return grad
-    return grad
+
 
 
 def grape_liouvillian_bfgs(
@@ -239,7 +228,7 @@ def grape_liouvillian_bfgs(
         _Lj = _liouvillian_propagator(H0, Hk, c_ops, dissipators, delta_t, x.reshape(m, N))
         _lambda_j = _liouvillian_lambda(_Lj, C)
         _rho_j = _liouvillian_density_matrix(_Lj, rho_0)
-        grad = _liouvillian_gradient(_lambda_j, _rho_j, delta_t, x.reshape(m, N), Hk, H0).flatten().real.astype(np.float64)
+        grad = _liouvillian_gradient(_lambda_j, _rho_j, delta_t, Hk).flatten().real.astype(np.float64)
         return -1 * grad
     
     res = None
