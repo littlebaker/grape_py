@@ -6,6 +6,15 @@ from qutip import Qobj, liouvillian
 from scipy.optimize import BFGS, line_search, minimize, OptimizeResult
 
 
+def _vec(v: np.ndarray) -> np.ndarray:
+    # column vectorization
+    return v.reshape((-1, 1), order="F")
+
+def _unvec(v: np.ndarray, shape: tuple) -> np.ndarray:
+    # 
+    return v.reshape(shape, order="F")
+
+
 def _liouvillian_operator_batch(H: np.ndarray, c_ops: List[np.ndarray]):
     """calculate liouvillian operator from Hamiltonian and collapse operators
     
@@ -67,7 +76,7 @@ def _liouvillian_density_matrix(Lj: np.ndarray, rho_0: Union[Qobj, np.ndarray]) 
         rho_0 (_type_): _description_
     """
     N, n2, _ = np.shape(Lj)
-    rho_0 = np.array(rho_0).reshape((-1, 1))
+    rho_0 = _vec(np.array(rho_0))
 
     rhoj = np.ndarray((N, n2, 1), np.complex128)
     rhoj[0] = Lj[0] @ rho_0 
@@ -85,13 +94,11 @@ def _liouvillian_lambda(Lj: np.ndarray, C: Union[Qobj, np.ndarray]) -> np.ndarra
         C (_type_): _description_
     """
     N, n2, _ = np.shape(Lj)
-    n = int(np.sqrt(n2))
 
-    # ??? why I need to conjugate C here
-    C = np.array(C).reshape((-1, 1))
+    c_vec = _vec(np.array(C))
 
     lambdaj = np.ndarray((N, n2, 1), np.complex128)
-    lambdaj[-1] = C
+    lambdaj[-1] = c_vec
     for j in range(N - 2, -1, -1):
         lambdaj[j] = Lj[j + 1].conj().T @ lambdaj[j + 1]
 
@@ -118,20 +125,17 @@ def _liouvillian_gradient(
     lambdaj = np.array(lambdaj)
     rhoj = np.array(rhoj)
     Hk = np.array(Hk)
+    
+    rhoj_unvec = _unvec(rhoj, (N, n, n))
 
     commutation = 1j * delta_t \
         * (
-            np.matmul(Hk[:, None], rhoj.reshape((N, n, n))) \
-            - np.matmul(rhoj.reshape((N, n, n)), Hk[:, None])
-        ).reshape((m, N, n2, 1))
-    lambdaj = lambdaj.conj().swapaxes(1, 2)
-    ipmat = -np.matmul(lambdaj, commutation)
+            np.matmul(Hk[:, None], rhoj_unvec) \
+            - np.matmul(rhoj_unvec, Hk[:, None])
+        )
+    lambdaj_unvec_dagger = _unvec(lambdaj, ((N, n, n))).conj().swapaxes(1, 2)
+    ipmat = -np.matmul(lambdaj_unvec_dagger, commutation)
     um = np.trace(ipmat, axis1=2, axis2=3)
-    # print("rhoj[0]:", rhoj[0])
-    # print("lambdaj[0]:", lambdaj[0])
-    # print("rhoj[-1]:", rhoj[-1])
-    # print("lambdaj[-1]:", lambdaj[-1])
-    # exit()
 
     return um
 
@@ -179,8 +183,6 @@ def grape_liouvillian_bfgs(
         rho_0 = rho_0.full()
     if isinstance(C, Qobj):
         C = C.full()
-    
-    print(C)
         
     assert target in ["trace_real", "trace_both", "abs"], "target function not supported"
 
@@ -205,10 +207,13 @@ def grape_liouvillian_bfgs(
     def _f(x):
         fx = np.trace(np.dot(
             C.T.conjugate(), 
-            _liouvillian_density_matrix(
-                _liouvillian_propagator(H0, Hk, c_ops, dissipators, delta_t, x.reshape(m, N)), 
-                rho_0
-            )[-1].reshape((n, n))
+            _unvec(
+                _liouvillian_density_matrix(
+                    _liouvillian_propagator(H0, Hk, c_ops, dissipators, delta_t, x.reshape(m, N)), 
+                    rho_0
+                )[-1],
+                (n, n)
+            )
         )).real.astype(np.float64)
         return -1 * fx
     
@@ -229,13 +234,11 @@ def grape_liouvillian_bfgs(
             
             u_kj = u_kj - 10 * grad
             
-            if np.abs(phi - phi_old) < atol:
+            # if np.abs(phi - phi_old) < atol:
+            #     break
+            if phi < -0.9999:
                 break
-            if phi > phi_old:
-                descend_count += 1
-                if descend_count > 5:
-                    break
-            phi_old = phi
+
             print(phi)
         res = u_kj
     if method.lower() == "bfgs" or method == "cascaded":

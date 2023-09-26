@@ -11,7 +11,7 @@ def test_grape():
     
     # desired state is (|0> + np.exp(1j*np.pi/4)*|1>)/sqrt(2)
     C = ket2dm((basis(2, 0) + np.exp(1j*np.pi/4)*basis(2, 1))/ np.sqrt(2)).full()
-    C = ket2dm(basis(2, 1)).full()
+    print(C.conj().T - C)
     
     # H0 is 0, it seems that using sigma_z will lead to a slower precision
     H0 = (sm.dag() * sm - 0.5 * identity(2)).full()
@@ -25,7 +25,7 @@ def test_grape():
     # alpha needs to be rather large, otherwise the precision is not good
     # alpha needs to be set depending on the delta_t, because the gradient's calculation 
     # is based on delta_t * alpha
-    threshold, u_kj, rho_T = grape(H0, Hk, np.full((2, 200), 3), rho_0, C, T, alpha=10, max_iter=10000, fidility=0.9999)
+    threshold, u_kj, rho_T = grape(H0, Hk, np.full((2, 100), 3), rho_0, C, T, alpha=10, max_iter=10000, fidility=0.9999)
     
     
     # print(u_kj)

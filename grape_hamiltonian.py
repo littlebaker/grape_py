@@ -55,12 +55,6 @@ def gradient(lambdaj, rhoj, delta_t, Hk):  # lambdaj: n*n, rhoj: N*n*n delta_t: 
     ipmat = -np.matmul(lambdaj, commutation)
     um = np.trace(ipmat, axis1=2, axis2=3)
     
-    # print("rhoj[0]:", rhoj[0])
-    # print("lambdaj[0]:", lambdaj[0])
-    # print("rhoj[-1]:", rhoj[-1])
-    # print("lambdaj[-1]:", lambdaj[-1])
-    # exit()
-
     return um
 
 
@@ -182,6 +176,7 @@ def grape(
         Uj = Uj_new
         rhoj = rhoj_new
         lambdaj = lambdaj_new
+        print(phi_new)
         
         if fidility is not None and phi_new > fidility:
             reach_threshold = True
