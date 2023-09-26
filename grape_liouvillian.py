@@ -30,7 +30,7 @@ def _liouvillian_operator_batch(H: np.ndarray, c_ops: List[np.ndarray]):
         H (np.ndarray): N*n*n matrix, N is the number of time steps, n is the dimension of the system
         c_ops (List[np.ndarray]): _description_
     """
-    N, n, _ = np.shape(H)
+    _, n, _ = np.shape(H)
     # l1 is the vectorized form of hamiltonian operator
     _l1 = -1j * (
         np.kron(np.eye(n), H) - np.kron(H.transpose((0, 2, 1)), np.eye(n))
@@ -41,7 +41,7 @@ def _liouvillian_operator_batch(H: np.ndarray, c_ops: List[np.ndarray]):
         _l2 += np.kron(c_op.conj(), c_op) \
                 - 0.5 * np.kron(np.eye(n), c_op.conj().T @ c_op) \
                 - 0.5 * np.kron((c_op.conj().T @ c_op).T, np.eye(n))
-    _l = _l1 + _l2
+
     return _l1 + _l2
         
     
@@ -65,8 +65,7 @@ def _liouvillian_propagator(
         delta_t (float): 
         u_kj (np.ndarray): 
     """
-    m, N = np.shape(u_kj)
-    n = H0.shape[0] 
+    
     _Hk_sum = np.tensordot(u_kj, Hk, axes=([0], [0]))  # Nxnxn
     
     L = _liouvillian_operator_batch(H0 + _Hk_sum, c_ops) + 0 if dissipators is None else np.sum(dissipators)
@@ -126,7 +125,6 @@ def _liouvillian_gradient(
         delta_t (_type_): _description_
         Hk (_type_): _description_
     """
-    m = len(Hk)
     N, n2, _ = np.shape(rhoj)
     n = int(np.sqrt(n2))
     lambdaj = np.array(lambdaj)
@@ -141,10 +139,10 @@ def _liouvillian_gradient(
             - np.matmul(rhoj_unvec, Hk[:, None])
         )
     lambdaj_unvec_dagger = _unvec(lambdaj, ((N, n, n))).conj().swapaxes(1, 2)
-    ipmat = -np.matmul(lambdaj_unvec_dagger, commutation)
-    um = np.trace(ipmat, axis1=2, axis2=3)
+    grad_original = -np.matmul(lambdaj_unvec_dagger, commutation)
+    grad = np.trace(grad_original, axis1=2, axis2=3)
 
-    return um
+    return grad
 
 
 def grape_liouvillian_bfgs(
