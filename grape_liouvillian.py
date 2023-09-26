@@ -42,6 +42,7 @@ def _liouvillian_operator_batch(H: np.ndarray, c_ops: List[np.ndarray]):
                 - 0.5 * np.kron(np.eye(n), c_op.conj().T @ c_op) \
                 - 0.5 * np.kron((c_op.conj().T @ c_op).T, np.eye(n))
 
+
     return _l1 + _l2
         
     
@@ -85,7 +86,7 @@ def _liouvillian_density_matrix(Lj: np.ndarray, rho_0: Union[Qobj, np.ndarray]) 
     rho_0 = _vec(np.array(rho_0))
 
     rhoj = np.ndarray((N, n2, 1), np.complex128)
-    rhoj[0] = Lj[0] @ rho_0 
+    rhoj[0] = rho_0 
     for j in range(1, N):
         rhoj[j] = Lj[j] @ rhoj[j - 1]
 
@@ -104,9 +105,9 @@ def _liouvillian_lambda(Lj: np.ndarray, C: Union[Qobj, np.ndarray]) -> np.ndarra
     c_vec = _vec(np.array(C))
 
     lambdaj = np.ndarray((N, n2, 1), np.complex128)
-    lambdaj[-1] = c_vec
+    lambdaj[-1] = Lj[-1] @ c_vec
     for j in range(N - 2, -1, -1):
-        lambdaj[j] = Lj[j + 1].conj().T @ lambdaj[j + 1]
+        lambdaj[j] = Lj[j].conj().T @ lambdaj[j + 1]
 
     return lambdaj
 
@@ -115,7 +116,10 @@ def _liouvillian_gradient(
     lambdaj: np.ndarray, 
     rhoj: np.ndarray, 
     delta_t: float, 
-    Hk: List[Qobj]
+    u_kj: np.ndarray,
+    Hk: List[np.ndarray],
+    H0: Union[np.ndarray, None] = None,
+    order = 1
 ) -> np.ndarray:
     """_summary_
 
@@ -131,7 +135,15 @@ def _liouvillian_gradient(
     rhoj = np.array(rhoj)
     Hk = np.array(Hk)
     
-    rhoj_unvec = _unvec(rhoj, (N, n, n))
+    L_all = np.eye(n2)
+    Lk = _liouvillian_operator_batch(Hk, [])
+    if H0 is not None:
+        _l = _liouvillian_operator_batch(H0, [])
+        L_all = _l + np.tensordot(u_kj, Lk, axes=([0], [0]))
+    Lk = Lk[:, np.newaxis]
+    L_all = L_all[np.newaxis, :]
+    
+    lambdaj_dagger = lambdaj.conj().swapaxes(1, 2)
 
     commutation = 1j * delta_t \
         * (
@@ -142,6 +154,7 @@ def _liouvillian_gradient(
     grad_original = -np.matmul(lambdaj_unvec_dagger, commutation)
     grad = np.trace(grad_original, axis1=2, axis2=3)
 
+    return grad
     return grad
 
 
@@ -226,7 +239,7 @@ def grape_liouvillian_bfgs(
         _Lj = _liouvillian_propagator(H0, Hk, c_ops, dissipators, delta_t, x.reshape(m, N))
         _lambda_j = _liouvillian_lambda(_Lj, C)
         _rho_j = _liouvillian_density_matrix(_Lj, rho_0)
-        grad = _liouvillian_gradient(_lambda_j, _rho_j, delta_t, Hk).flatten().real.astype(np.float64)
+        grad = _liouvillian_gradient(_lambda_j, _rho_j, delta_t, x.reshape(m, N), Hk, H0).flatten().real.astype(np.float64)
         return -1 * grad
     
     res = None
