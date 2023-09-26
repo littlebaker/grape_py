@@ -86,7 +86,7 @@ def _liouvillian_density_matrix(Lj: np.ndarray, rho_0: Union[Qobj, np.ndarray]) 
     rho_0 = _vec(np.array(rho_0))
 
     rhoj = np.ndarray((N, n2, 1), np.complex128)
-    rhoj[0] = rho_0 
+    rhoj[0] = Lj[0] @ rho_0 
     for j in range(1, N):
         rhoj[j] = Lj[j] @ rhoj[j - 1]
 
@@ -105,9 +105,9 @@ def _liouvillian_lambda(Lj: np.ndarray, C: Union[Qobj, np.ndarray]) -> np.ndarra
     c_vec = _vec(np.array(C))
 
     lambdaj = np.ndarray((N, n2, 1), np.complex128)
-    lambdaj[-1] = Lj[-1] @ c_vec
+    lambdaj[-1] = c_vec
     for j in range(N - 2, -1, -1):
-        lambdaj[j] = Lj[j].conj().T @ lambdaj[j + 1]
+        lambdaj[j] = Lj[j + 1].conj().T @ lambdaj[j + 1]
 
     return lambdaj
 
