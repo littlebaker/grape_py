@@ -18,7 +18,7 @@ def _vec(v: np.ndarray) -> np.ndarray:
     return v.reshape((-1, 1), order="F")
 
 def _unvec(v: np.ndarray, shape: tuple) -> np.ndarray:
-    # 
+    # reshape column vector to matrix
     return v.reshape(shape, order="F")
 
 
