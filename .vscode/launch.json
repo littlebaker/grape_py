@@ -5,6 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Test liouvillian",
+            "type": "python",
+            "request": "launch",
+            "program": "test_liouvillian.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Python: test",
             "type": "python",
             "request": "launch",

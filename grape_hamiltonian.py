@@ -12,6 +12,7 @@ def _propagator(H0, Hk, delta_t, u_kj):  # u_kj mxN, Hk mxnxn, Uj Nxnxn matrix
 
     sigma = np.tensordot(u_kj, Hk, axes=([0], [0]))  # Nxnxn
     Uj = expm(-1j * delta_t * (H0 + sigma))
+    # print(np.max(list(map(lambda x: np.linalg.cond(x), Uj))))
     return Uj
 
 
@@ -53,6 +54,12 @@ def gradient(lambdaj, rhoj, delta_t, Hk):  # lambdaj: n*n, rhoj: N*n*n delta_t: 
     lambdaj = lambdaj.conj().swapaxes(1, 2)
     ipmat = -np.matmul(lambdaj, commutation)
     um = np.trace(ipmat, axis1=2, axis2=3)
+    
+    # print("rhoj[0]:", rhoj[0])
+    # print("lambdaj[0]:", lambdaj[0])
+    # print("rhoj[-1]:", rhoj[-1])
+    # print("lambdaj[-1]:", lambdaj[-1])
+    # exit()
 
     return um
 
