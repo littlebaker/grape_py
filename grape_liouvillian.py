@@ -86,7 +86,8 @@ def _liouvillian_density_matrix(Lj: np.ndarray, rho_0: Union[Qobj, np.ndarray]) 
     rho_0 = _vec(np.array(rho_0))
 
     rhoj = np.ndarray((N, n2, 1), np.complex128)
-    rhoj[0] = Lj[0] @ rho_0 
+    # rhoj[0] = Lj[0] @ rho_0 
+    rhoj[0] = rho_0 
     for j in range(1, N):
         rhoj[j] = Lj[j] @ rhoj[j - 1]
 
@@ -105,7 +106,8 @@ def _liouvillian_lambda(Lj: np.ndarray, C: Union[Qobj, np.ndarray]) -> np.ndarra
     c_vec = _vec(np.array(C))
 
     lambdaj = np.ndarray((N, n2, 1), np.complex128)
-    lambdaj[-1] = c_vec
+    # lambdaj[-1] = c_vec
+    lambdaj[-1] = Lj[-1].conj().T @ c_vec
     for j in range(N - 2, -1, -1):
         lambdaj[j] = Lj[j + 1].conj().T @ lambdaj[j + 1]
 
@@ -131,16 +133,24 @@ def _liouvillian_gradient(
     lambdaj = np.array(lambdaj)
     rhoj = np.array(rhoj)
     Hk = np.array(Hk)
-    rhoj_unvec = _unvec(rhoj, ((N, n, n)))
+    # rhoj_unvec = _unvec(rhoj, ((N, n, n)))
 
-    lambdaj_unvec_dagger = _unvec(lambdaj, ((N, n, n))).conj().swapaxes(1, 2)
-    commutation = 1j * delta_t \
-        * (
-            np.matmul(Hk[:, None], rhoj_unvec) \
-            - np.matmul(rhoj_unvec, Hk[:, None])
-        )
+    # lambdaj_unvec_dagger = _unvec(lambdaj, ((N, n, n))).conj().swapaxes(1, 2)
+    # commutation = 1j * delta_t \
+    #     * (
+    #         np.matmul(Hk[:, None], rhoj_unvec) \
+    #         - np.matmul(rhoj_unvec, Hk[:, None])
+    #     )
     
-    grad_original = -np.matmul(lambdaj_unvec_dagger, commutation)
+    # grad_original = -np.matmul(lambdaj_unvec_dagger, commutation)
+    
+    Lk = _liouvillian_operator_batch(Hk, [])
+    Lk = Lk[:, np.newaxis]
+    lambdaj_dagger = lambdaj.conj().swapaxes(1, 2)
+    commutator = Lk * delta_t
+    
+    grad_original = lambdaj_dagger @ commutator @ rhoj 
+    
     grad = np.trace(grad_original, axis1=2, axis2=3)
 
     return grad
@@ -213,12 +223,12 @@ def grape_liouvillian_bfgs(
     
     def _f(x):
         fx = np.trace(np.dot(
-            C.T.conjugate(), 
+            rho_0.T.conjugate(), 
             _unvec(
-                _liouvillian_density_matrix(
+                _liouvillian_lambda(
                     _liouvillian_propagator(H0, Hk, c_ops, dissipators, delta_t, x.reshape(m, N)), 
-                    rho_0
-                )[-1],
+                    C
+                )[0],
                 (n, n)
             )
         )).real.astype(np.float64)
@@ -233,8 +243,7 @@ def grape_liouvillian_bfgs(
     
     res = None
     if method == "direct" or method == "cascaded":
-        descend_count = 0
-        phi_old = 0
+
         for i in range(max_iter):
             phi = _f(u_kj.flatten())
             grad = _grad_f(u_kj.flatten()).reshape((m, N)).real.astype(np.float64)

@@ -36,7 +36,7 @@ def test_grape():
         c_ops=[],
         gtol=1e-9,
         atol=1e-6,
-        method="direct"
+        method="bfgs"
     )
     
     
