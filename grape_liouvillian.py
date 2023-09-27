@@ -2,9 +2,8 @@
 from typing import List, Union
 import numpy as np
 from scipy.linalg import expm
-from tqdm import tqdm
-from qutip import Qobj, liouvillian
-from scipy.optimize import BFGS, line_search, minimize, OptimizeResult
+from qutip import Qobj
+from scipy.optimize import minimize, OptimizeResult
 
 """
 The algorithm is based on the paper: 

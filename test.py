@@ -1,6 +1,6 @@
 # TODO: add test cases
 from grape_hamiltonian import grape, grape_bfgs
-from qutip import destroy, identity, tensor, expect, mesolve, basis, ket2dm
+from qutip import destroy, identity, tensor, basis, ket2dm
 import numpy as np
 
 
